@@ -14424,5 +14424,15 @@
         "unknown": "Restart Orca to try again."
       }
     }
+  },
+  "notificationPanel": {
+    "toggle": {
+      "title": "Notifications",
+      "ariaLabel": "Toggle notification panel"
+    },
+    "recoverableError": {
+      "title": "Orca notifications hit an error.",
+      "description": "The notification panel could not finish rendering. Retry to remount it, or reopen it."
+    }
   }
 }

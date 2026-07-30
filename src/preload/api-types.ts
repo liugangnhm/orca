@@ -11,6 +11,11 @@ import type {
 import type { NativeFileDropPayload } from '../shared/native-file-drop'
 import type { DashboardSnapshot, DashboardRevealAgentArgs } from '../shared/dashboard-snapshot'
 import type {
+  NotificationPanelEntry,
+  NotificationPanelSnapshot,
+  NotificationRevealRequest
+} from '../shared/notification-panel-types'
+import type {
   TerminalPreviewConnectResult,
   TerminalPreviewDataPayload
 } from '../shared/terminal-preview'
@@ -2462,6 +2467,21 @@ export type PreloadApi = {
     onSnapshot: (callback: (snapshot: DashboardSnapshot) => void) => () => void
     revealAgent: (args: DashboardRevealAgentArgs) => Promise<void>
     ackAgent: (paneKey: string) => Promise<void>
+  }
+  notificationPanel: {
+    open: () => Promise<void>
+    close: () => Promise<void>
+    toggle: () => Promise<void>
+    getPanelOpen: () => Promise<boolean>
+    getHistory: () => Promise<NotificationPanelSnapshot | null>
+    dismiss: (id: string) => Promise<NotificationPanelSnapshot | null>
+    clearHistory: () => Promise<NotificationPanelSnapshot | null>
+    revealNotification: (args: NotificationRevealRequest) => Promise<void>
+    ackNotification: (paneKey: string) => Promise<void>
+    onNew: (callback: (entry: NotificationPanelEntry) => void) => () => void
+    onSnapshot: (callback: (snapshot: NotificationPanelSnapshot) => void) => () => void
+    onPanelOpenChanged: (callback: (open: boolean) => void) => () => void
+    onUnreadChanged: (callback: (count: number) => void) => () => void
   }
   terminalPreview: {
     connect: (

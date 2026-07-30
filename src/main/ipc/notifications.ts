@@ -23,6 +23,9 @@ import type {
 } from '../../shared/types'
 import { getRepoIdFromWorktreeId } from '../../shared/worktree-id'
 import type { OrcaRuntimeService } from '../runtime/orca-runtime'
+import { publishNotificationToPanel } from './notification-panel'
+import type { NotificationPanelEntry } from '../../shared/notification-panel-types'
+import { randomUUID } from 'node:crypto'
 import { buildNotificationOptions } from './notification-options'
 import { readNotificationAuthorizationStatus } from './notification-authorization-status'
 import { parsePaneKey } from '../../shared/stable-pane-id'
@@ -559,6 +562,7 @@ export function registerNotificationHandlers(store: Store, runtime?: OrcaRuntime
           })
         }
 
+        publishNotificationToPanelFromDispatch(args, store)
         return { delivered: true }
       }
 
@@ -624,6 +628,37 @@ export function registerNotificationHandlers(store: Store, runtime?: OrcaRuntime
       return { ok: false, reason: 'read-failed' }
     }
   })
+}
+
+function publishNotificationToPanelFromDispatch(
+  args: NotificationDispatchRequest,
+  store: Store
+): void {
+  const settings = store.getSettings().notifications
+  if (!settings.showInAppPanel) {
+    return
+  }
+  const paneTarget = args.paneKey ? parsePaneKey(args.paneKey) : null
+  const entry: NotificationPanelEntry = {
+    id: args.notificationId ?? randomUUID(),
+    source: args.source === 'terminal-bell' ? 'terminal-bell' : 'agent-task-complete',
+    status: 'unread',
+    createdAt: Date.now(),
+    readAt: null,
+    worktreeId: args.worktreeId ?? null,
+    paneKey: args.paneKey ?? null,
+    tabId: paneTarget?.tabId ?? null,
+    leafId: paneTarget?.leafId ?? null,
+    repoId: args.worktreeId ? getRepoIdFromWorktreeId(args.worktreeId) : null,
+    title: args.worktreeLabel ?? args.repoLabel ?? 'Notification',
+    body: args.agentPrompt ?? args.terminalTitle ?? '',
+    agentType: args.agentType ?? null,
+    agentState: args.agentState ?? null,
+    worktreeLabel: args.worktreeLabel ?? null,
+    repoLabel: args.repoLabel ?? null,
+    interrupted: args.agentInterrupted ?? false
+  }
+  publishNotificationToPanel(entry)
 }
 
 /**

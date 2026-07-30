@@ -128,6 +128,9 @@ function createSettings(overrides: TestSettingsOverrides = {}): GlobalSettings {
       terminalBell: false,
       suppressWhenFocused: true,
       customSoundId: 'system',
+      showInAppPanel: true,
+      panelHistoryLimit: 100,
+      panelAutoDismissMs: null,
       customSoundPath: null,
       customSoundVolume: 100
     },

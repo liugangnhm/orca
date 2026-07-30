@@ -137,7 +137,10 @@ function createSettings(overrides: TestSettingsOverrides = {}): GlobalSettings {
       suppressWhenFocused: true,
       customSoundId: 'system',
       customSoundPath: null,
-      customSoundVolume: 100
+      customSoundVolume: 100,
+      showInAppPanel: true,
+      panelHistoryLimit: 100,
+      panelAutoDismissMs: null
     },
     promptCacheTimerEnabled: false,
     promptCacheTtlMs: 300_000,

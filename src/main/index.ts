@@ -176,6 +176,7 @@ import {
 } from './window/attach-main-window-services'
 import { createMainWindow, loadMainWindow } from './window/createMainWindow'
 import { zoomDashboardPopoutIfFocused } from './window/dashboard-popout-window'
+import { createOrFocusNotificationPanel } from './window/notification-panel-window'
 import {
   createSystemTray,
   destroySystemTray,
@@ -1093,6 +1094,11 @@ function getSystemTrayOptions(): SystemTrayOptions | null {
       // Why: updater status renders in the main window, so a bare check would complete invisibly.
       showMainWindowFromTray()
       runUserInitiatedUpdateCheck()
+    },
+    onOpenNotificationPanel: () => {
+      if (store) {
+        createOrFocusNotificationPanel(store)
+      }
     },
     onQuit: quitFromSystemTray
   }

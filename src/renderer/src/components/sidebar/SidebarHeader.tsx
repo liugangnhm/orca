@@ -4,6 +4,7 @@ import { useAppStore } from '@/store'
 import { Button } from '@/components/ui/button'
 import { Tooltip, TooltipTrigger, TooltipContent } from '@/components/ui/tooltip'
 import SidebarWorkspaceOptionsMenu from './SidebarWorkspaceOptionsMenu'
+import { NotificationPanelToolbarButton } from './NotificationPanelToolbarButton'
 import { useShortcutLabel } from '@/hooks/useShortcutLabel'
 import { openWorkspaceCreationComposerWithTourHandoff } from '../contextual-tours/workspace-creation-tour-handoff'
 import { translate } from '@/i18n/i18n'
@@ -32,6 +33,7 @@ const SidebarHeader = React.memo(function SidebarHeader({
         </span>
       </div>
       <div className="flex items-center gap-1.5 shrink-0">
+        <NotificationPanelToolbarButton />
         <SidebarWorkspaceOptionsMenu
           preserveWorkspaceBoardOpen
           onMenuOpenChange={onWorkspaceBoardMenuOpenChange}

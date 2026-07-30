@@ -134,6 +134,7 @@ function createOptions(
     onOpen: vi.fn(),
     onOpenSettings: vi.fn(),
     onCheckForUpdates: vi.fn(),
+    onOpenNotificationPanel: vi.fn(),
     onQuit: vi.fn()
   }
 }
@@ -202,13 +203,18 @@ describe('createSystemTray', () => {
     expect(trayInstances).toHaveLength(1)
     expect(trayInstances[0].image).toBe(resizedImage)
     expect(trayInstances[0].setToolTip).toHaveBeenCalledWith('Orca')
-    expect(builtMenuItems().map((item) => item.label)).toEqual(['Open Orca', undefined, 'Quit'])
+    expect(builtMenuItems().map((item) => item.label)).toEqual([
+      'Open Orca',
+      'Notification History...',
+      undefined,
+      'Quit'
+    ])
     const clickHandler = trayInstances[0].on.mock.calls.find((call) => call[0] === 'click')?.[1]
     expect(clickHandler).toBeTypeOf('function')
 
     builtMenuItems()[0].click?.()
     ;(clickHandler as () => void)()
-    builtMenuItems()[2].click?.()
+    builtMenuItems()[3].click?.()
     expect(options.onOpen).toHaveBeenCalledTimes(2)
     expect(options.onQuit).toHaveBeenCalledOnce()
   })
@@ -229,6 +235,7 @@ describe('createSystemTray', () => {
     })
     expect(builtMenuItems().map((item) => item.label)).toEqual([
       'Open Orca',
+      'Notification History...',
       undefined,
       'Settings',
       'Check for Updates...',
@@ -240,6 +247,7 @@ describe('createSystemTray', () => {
 
     for (const [label, callback] of [
       ['Open Orca', options.onOpen],
+      ['Notification History...', options.onOpenNotificationPanel],
       ['Settings', options.onOpenSettings],
       ['Check for Updates...', options.onCheckForUpdates],
       ['Quit', options.onQuit]

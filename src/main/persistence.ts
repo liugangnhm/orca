@@ -3826,6 +3826,15 @@ export class Store {
     return parseCodexResetCreditAttemptLedger(this.state.codexResetCreditAttemptLedger)
   }
 
+  getState(): PersistedState {
+    return this.state
+  }
+
+  setState(updates: Partial<PersistedState>): void {
+    this.state = { ...this.state, ...updates }
+    this.scheduleSave()
+  }
+
   replaceCodexResetCreditAttemptLedgerAndFlush(ledger: CodexResetCreditAttemptLedger): void {
     if (this.writesFrozen) {
       throw new Error('Cannot persist Codex reset-credit attempts while writes are frozen')

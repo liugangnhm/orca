@@ -21,6 +21,7 @@ import type {
   FeatureInteractionTelemetryBucketState
 } from './feature-interactions'
 import type { GitBranchChangeStatus } from './git-status-types'
+import type { NotificationHistoryState } from './notification-panel-types'
 import type { KeybindingOverrides, TerminalShortcutPolicy } from './keybindings'
 import type { RepoIcon } from './repo-icon'
 import type { AppIconId } from './app-icon'
@@ -2415,6 +2416,9 @@ export type NotificationSettings = {
     | 'custom'
   customSoundPath: string | null
   customSoundVolume: number
+  showInAppPanel: boolean
+  panelHistoryLimit: number
+  panelAutoDismissMs: number | null
 }
 
 export type CodexManagedAccount = {
@@ -3414,6 +3418,7 @@ export type PersistedUIState = {
   /** Saved bounds for the pop-out dashboard window so it restores to its last
    *  position/size. Independent of the main window's bounds. */
   dashboardPopoutBounds?: { x: number; y: number; width: number; height: number } | null
+  notificationPanelBounds?: { x: number; y: number; width: number; height: number } | null
   /** One-shot flag: 'recent' once meant the smart sort (v1→v2 rename), migrated to 'smart' once so the new last-activity 'recent' isn't re-clobbered. */
   _sortBySmartMigrated?: boolean
   /** LEGACY inline-agents flag, stamped unconditionally every load so it can't gate migration; kept only for rollback forward-compat (real gate: _inlineAgentsDefaultedForAllUsers). */
@@ -3578,6 +3583,7 @@ export type PersistedState = {
   onboarding: OnboardingState
   /** Main-owned telemetry de-dupe marker; never exposed through PersistedUIState. */
   featureInteractionTelemetryBuckets?: FeatureInteractionTelemetryBucketState
+  notificationHistory?: NotificationHistoryState
   /** Main-owned reset mutation journal. Never expose this through renderer settings APIs. */
   codexResetCreditAttemptLedger?: CodexResetCreditAttemptLedger
 }

@@ -22,6 +22,8 @@ export type SystemTrayOptions = {
   onCheckForUpdates: () => void
   /** Quit Orca for real (caller must set the quitting latch before quitting). */
   onQuit: () => void
+  /** Open the notification history panel. */
+  onOpenNotificationPanel: () => void
 }
 
 // Why: Electron's Tray is GC-collected and its icon vanishes if no live
@@ -263,6 +265,10 @@ export function createSystemTray(opts: SystemTrayOptions): Tray | null {
     {
       label: translateMain('tray.openOrca', 'Open Orca'),
       click: safeMenuAction(() => opts.onOpen())
+    },
+    {
+      label: translateMain('tray.notificationHistory', 'Notification History...'),
+      click: safeMenuAction(() => opts.onOpenNotificationPanel())
     },
     { type: 'separator' },
     // Why: reuse the app menu's keys so the two entry points never drift.

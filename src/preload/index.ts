@@ -6,6 +6,11 @@ import { glApi } from './gitlab'
 import type { AppIdentity } from '../shared/app-identity'
 import type { DashboardSnapshot, DashboardRevealAgentArgs } from '../shared/dashboard-snapshot'
 import type {
+  NotificationPanelEntry,
+  NotificationPanelSnapshot,
+  NotificationRevealRequest
+} from '../shared/notification-panel-types'
+import type {
   TerminalPreviewConnectResult,
   TerminalPreviewDataPayload
 } from '../shared/terminal-preview'
@@ -2291,6 +2296,47 @@ const api = {
       ipcRenderer.invoke('dashboardPopout:revealAgent', args),
     ackAgent: (paneKey: string): Promise<void> =>
       ipcRenderer.invoke('dashboardPopout:ackAgent', { paneKey })
+  },
+
+  notificationPanel: {
+    open: (): Promise<void> => ipcRenderer.invoke('notificationPanel:open'),
+    close: (): Promise<void> => ipcRenderer.invoke('notificationPanel:close'),
+    toggle: (): Promise<void> => ipcRenderer.invoke('notificationPanel:toggle'),
+    getPanelOpen: (): Promise<boolean> => ipcRenderer.invoke('notificationPanel:getPanelOpen'),
+    getHistory: (): Promise<NotificationPanelSnapshot | null> =>
+      ipcRenderer.invoke('notificationPanel:getHistory'),
+    dismiss: (id: string): Promise<NotificationPanelSnapshot | null> =>
+      ipcRenderer.invoke('notificationPanel:dismiss', id),
+    clearHistory: (): Promise<NotificationPanelSnapshot | null> =>
+      ipcRenderer.invoke('notificationPanel:clearHistory'),
+    revealNotification: (args: NotificationRevealRequest): Promise<void> =>
+      ipcRenderer.invoke('notificationPanel:revealNotification', args),
+    ackNotification: (paneKey: string): Promise<void> =>
+      ipcRenderer.invoke('notificationPanel:ackNotification', paneKey),
+    onNew: (callback: (entry: NotificationPanelEntry) => void): (() => void) => {
+      const listener = (_event: Electron.IpcRendererEvent, entry: NotificationPanelEntry): void =>
+        callback(entry)
+      ipcRenderer.on('notification:panel:new', listener)
+      return () => ipcRenderer.removeListener('notification:panel:new', listener)
+    },
+    onSnapshot: (callback: (snapshot: NotificationPanelSnapshot) => void): (() => void) => {
+      const listener = (
+        _event: Electron.IpcRendererEvent,
+        snapshot: NotificationPanelSnapshot
+      ): void => callback(snapshot)
+      ipcRenderer.on('notification:panel:snapshot', listener)
+      return () => ipcRenderer.removeListener('notification:panel:snapshot', listener)
+    },
+    onPanelOpenChanged: (callback: (open: boolean) => void): (() => void) => {
+      const listener = (_event: Electron.IpcRendererEvent, open: boolean): void => callback(open)
+      ipcRenderer.on('notification:panelOpenChanged', listener)
+      return () => ipcRenderer.removeListener('notification:panelOpenChanged', listener)
+    },
+    onUnreadChanged: (callback: (count: number) => void): (() => void) => {
+      const listener = (_event: Electron.IpcRendererEvent, count: number): void => callback(count)
+      ipcRenderer.on('notification:panelUnreadChanged', listener)
+      return () => ipcRenderer.removeListener('notification:panelUnreadChanged', listener)
+    }
   },
 
   terminalPreview: {
