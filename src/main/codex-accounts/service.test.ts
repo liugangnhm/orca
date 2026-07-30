@@ -141,7 +141,7 @@ function createSettings(overrides: TestSettingsOverrides = {}): GlobalSettings {
       showInAppPanel: true,
       panelHistoryLimit: 100,
       panelAutoDismissMs: null,
-      panelAutoOpenOnNotification: false
+      panelAutoOpenOnNotification: true
     },
     promptCacheTimerEnabled: false,
     promptCacheTtlMs: 300_000,

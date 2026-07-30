@@ -141,7 +141,7 @@ export function getDefaultNotificationSettings(): NotificationSettings {
     showInAppPanel: true,
     panelHistoryLimit: 100,
     panelAutoDismissMs: null,
-    panelAutoOpenOnNotification: false
+    panelAutoOpenOnNotification: true
   }
 }
 
