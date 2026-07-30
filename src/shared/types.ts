@@ -2419,7 +2419,6 @@ export type NotificationSettings = {
   showInAppPanel: boolean
   panelHistoryLimit: number
   panelAutoDismissMs: number | null
-  panelAutoOpenOnNotification: boolean
 }
 
 export type CodexManagedAccount = {

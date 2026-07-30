@@ -140,8 +140,7 @@ export function getDefaultNotificationSettings(): NotificationSettings {
     customSoundVolume: 100,
     showInAppPanel: true,
     panelHistoryLimit: 100,
-    panelAutoDismissMs: null,
-    panelAutoOpenOnNotification: true
+    panelAutoDismissMs: null
   }
 }
 

@@ -131,7 +131,6 @@ function createSettings(overrides: TestSettingsOverrides = {}): GlobalSettings {
       showInAppPanel: true,
       panelHistoryLimit: 100,
       panelAutoDismissMs: null,
-      panelAutoOpenOnNotification: true,
       customSoundPath: null,
       customSoundVolume: 100
     },

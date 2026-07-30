@@ -127,8 +127,7 @@ describe('onboarding flow persistence', () => {
       customSoundVolume: 60,
       showInAppPanel: true,
       panelHistoryLimit: 100,
-      panelAutoDismissMs: null,
-      panelAutoOpenOnNotification: false
+      panelAutoDismissMs: null
     })
 
     expect(notifications).toEqual({
@@ -141,8 +140,7 @@ describe('onboarding flow persistence', () => {
       customSoundVolume: 60,
       showInAppPanel: true,
       panelHistoryLimit: 100,
-      panelAutoDismissMs: null,
-      panelAutoOpenOnNotification: false
+      panelAutoDismissMs: null
     })
   })
 

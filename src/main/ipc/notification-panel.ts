@@ -23,11 +23,8 @@ let autoOpenStore: Store | null = null
 
 export function publishNotificationToPanel(entry: NotificationPanelEntry): void {
   if (historyStore) {
-    const shouldAutoOpen =
-      autoOpenStore?.getSettings().notifications.panelAutoOpenOnNotification === true &&
-      getNotificationPanelWindow() === null
     historyStore.appendEntry(entry)
-    if (shouldAutoOpen && autoOpenStore) {
+    if (autoOpenStore && getNotificationPanelWindow() === null) {
       createOrFocusNotificationPanel(autoOpenStore)
     }
     return
