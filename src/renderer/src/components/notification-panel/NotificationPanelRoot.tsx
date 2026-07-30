@@ -16,26 +16,40 @@ export function NotificationPanelRoot() {
 
   useNotificationPanelEvents(setSnapshot)
 
-  const handleReveal = useCallback((entry: NotificationPanelEntry) => {
-    void window.api.notificationPanel.revealNotification({
-      id: entry.id,
-      worktreeId: entry.worktreeId,
-      paneKey: entry.paneKey,
-      repoId: entry.repoId
-    })
-    void window.api.notificationPanel.dismiss(entry.id)
+  const handleClose = useCallback(() => {
+    void window.api.notificationPanel.close()
   }, [])
 
-  const handleDismiss = useCallback((id: string) => {
-    void window.api.notificationPanel.dismiss(id)
-  }, [])
+  const handleReveal = useCallback(
+    (entry: NotificationPanelEntry) => {
+      void window.api.notificationPanel.revealNotification({
+        id: entry.id,
+        worktreeId: entry.worktreeId,
+        paneKey: entry.paneKey,
+        repoId: entry.repoId
+      })
+      void window.api.notificationPanel.dismiss(entry.id).then((result) => {
+        if (result && result.active.length === 0) {
+          handleClose()
+        }
+      })
+    },
+    [handleClose]
+  )
+
+  const handleDismiss = useCallback(
+    (id: string) => {
+      void window.api.notificationPanel.dismiss(id).then((result) => {
+        if (result && result.active.length === 0) {
+          handleClose()
+        }
+      })
+    },
+    [handleClose]
+  )
 
   const handleClearHistory = useCallback(() => {
     void window.api.notificationPanel.clearHistory()
-  }, [])
-
-  const handleClose = useCallback(() => {
-    void window.api.notificationPanel.close()
   }, [])
 
   return (
