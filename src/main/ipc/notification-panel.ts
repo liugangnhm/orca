@@ -19,10 +19,17 @@ import type {
 
 let lastSnapshot: NotificationPanelSnapshot | null = null
 let historyStore: NotificationHistoryStore | null = null
+let autoOpenStore: Store | null = null
 
 export function publishNotificationToPanel(entry: NotificationPanelEntry): void {
   if (historyStore) {
+    const shouldAutoOpen =
+      autoOpenStore?.getSettings().notifications.panelAutoOpenOnNotification === true &&
+      getNotificationPanelWindow() === null
     historyStore.appendEntry(entry)
+    if (shouldAutoOpen && autoOpenStore) {
+      createOrFocusNotificationPanel(autoOpenStore)
+    }
     return
   }
   const panel = getNotificationPanelWindow()
@@ -41,6 +48,7 @@ export function publishNotificationToPanel(entry: NotificationPanelEntry): void 
 }
 
 export function registerNotificationPanelHandlers(store: Store): void {
+  autoOpenStore = store
   historyStore = new NotificationHistoryStore(
     {
       load: () => store.getState().notificationHistory ?? { entries: [], lastPrunedAt: 0 },

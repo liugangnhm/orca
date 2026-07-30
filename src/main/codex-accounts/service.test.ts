@@ -140,7 +140,8 @@ function createSettings(overrides: TestSettingsOverrides = {}): GlobalSettings {
       customSoundVolume: 100,
       showInAppPanel: true,
       panelHistoryLimit: 100,
-      panelAutoDismissMs: null
+      panelAutoDismissMs: null,
+      panelAutoOpenOnNotification: false
     },
     promptCacheTimerEnabled: false,
     promptCacheTtlMs: 300_000,
