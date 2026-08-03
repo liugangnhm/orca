@@ -22,6 +22,7 @@ import type {
 import type { NativeChatMessage } from '../../shared/native-chat-types'
 import type { RuntimeTerminalRead } from '../../shared/runtime-types'
 import { orchestrationMigrationData } from '../../shared/orchestration-rpc-contract'
+import { ORCHESTRATION_RUN_PAGE_LIMIT } from '../../shared/orchestration-run-pagination'
 import {
   formatMessageReadOnlyTag,
   formatOrchestrationCheckText,
@@ -463,19 +464,25 @@ export const ORCHESTRATION_HANDLERS: Record<string, CommandHandler> = {
     )
   },
 
-  'orchestration run-list': async ({ client, json }) => {
+  'orchestration run-list': async ({ flags, client, json }) => {
     const result = await client.call<{
       runs: { id: string; objective: string; legacy: number }[]
-    }>('orchestration.runList', {})
-    printResult(result, json, (r) =>
-      r.runs.length === 0
-        ? 'No Runs found.'
-        : r.runs
-            .map(
-              (run) => `${run.id}${run.legacy ? ' [legacy, inspect only]' : ''} ${run.objective}`
-            )
-            .join('\n')
-    )
+      nextCursor: string | null
+    }>('orchestration.runList', {
+      limit: getOptionalPositiveIntegerFlag(flags, 'limit') ?? ORCHESTRATION_RUN_PAGE_LIMIT,
+      cursor: getOptionalStringFlag(flags, 'cursor')
+    })
+    printResult(result, json, (r) => {
+      const rows =
+        r.runs.length === 0
+          ? 'No Runs found.'
+          : r.runs
+              .map(
+                (run) => `${run.id}${run.legacy ? ' [legacy, inspect only]' : ''} ${run.objective}`
+              )
+              .join('\n')
+      return r.nextCursor ? `${rows}\nMore Runs: --cursor ${r.nextCursor}` : rows
+    })
   },
 
   'orchestration run-show': async ({ flags, client, json }) => {
@@ -520,7 +527,7 @@ export const ORCHESTRATION_HANDLERS: Record<string, CommandHandler> = {
       throwNoActiveSenderTerminal()
     }
 
-    // Why: lifecycle senders keep ORCA_TERMINAL_HANDLE verbatim — no liveness probe (worker_done must survive the mid-restart window) and no remint (older runtimes require from === the stale assignee_handle).
+    // Why: lifecycle senders preserve ORCA_TERMINAL_HANDLE across restarts for older runtimes.
     const from = await resolveOrchestrationTerminalHandle(flags, cwd, client, 'from')
     const sendParams = {
       from,
@@ -1086,13 +1093,15 @@ export const ORCHESTRATION_HANDLERS: Record<string, CommandHandler> = {
     )
   },
 
-  'orchestration gate-create': async ({ flags, client, json }) => {
+  'orchestration gate-create': async ({ flags, client, cwd, json }) => {
     const result = await callMutation<{
       gate: { id: string; task_id: string; status: string }
     }>(client, flags, 'orchestration.gateCreate', {
       task: getRequiredStringFlag(flags, 'task'),
       question: getRequiredStringFlag(flags, 'question'),
-      options: getOptionalStringFlag(flags, 'options')
+      options: getOptionalStringFlag(flags, 'options'),
+      // Why: gates are Run-scoped, so the coordinator handle is the caller identity the runtime authorizes against.
+      from: await resolveCoordinatorTerminalHandle(flags, cwd, client)
     })
     printResult(
       result,
@@ -1101,23 +1110,30 @@ export const ORCHESTRATION_HANDLERS: Record<string, CommandHandler> = {
     )
   },
 
-  'orchestration gate-resolve': async ({ flags, client, json }) => {
+  'orchestration gate-resolve': async ({ flags, client, cwd, json }) => {
     const result = await callMutation<{
       gate: { id: string; task_id: string; status: string; resolution: string }
     }>(client, flags, 'orchestration.gateResolve', {
       id: getRequiredStringFlag(flags, 'id'),
-      resolution: getRequiredStringFlag(flags, 'resolution')
+      resolution: getRequiredStringFlag(flags, 'resolution'),
+      from: await resolveCoordinatorTerminalHandle(flags, cwd, client)
     })
     printResult(result, json, (r) => `Gate ${r.gate.id} resolved: ${r.gate.resolution}`)
   },
 
-  'orchestration gate-list': async ({ flags, client, json }) => {
+  'orchestration gate-list': async ({ flags, client, cwd, json }) => {
+    const run = getOptionalStringFlag(flags, 'run')
+    // Why: named runs remain inspectable without a pane; only implicit runs resolve identity.
+    const from = run ? undefined : await resolveCoordinatorTerminalHandle(flags, cwd, client)
     const result = await client.call<{
       gates: { id: string; task_id: string; question: string; status: string }[]
       count: number
+      runId?: string
     }>('orchestration.gateList', {
       task: getOptionalStringFlag(flags, 'task'),
-      status: getOptionalStringFlag(flags, 'status')
+      status: getOptionalStringFlag(flags, 'status'),
+      run,
+      from
     })
     printResult(result, json, (r) => {
       if (r.gates.length === 0) {
