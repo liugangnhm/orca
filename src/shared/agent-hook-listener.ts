@@ -22,6 +22,7 @@ import {
   normalizeAgentStatusPayload,
   type AgentStatusState,
   type AgentSubagentSnapshot,
+  type AgentType,
   type ParsedAgentStatusPayload
 } from './agent-status-types'
 import { normalizeOptionalField } from './agent-status-field-normalization'
@@ -2295,6 +2296,9 @@ function isNewTurnEvent(source: AgentHookSource, eventName: unknown): boolean {
     // Why: Kimi Code emits Claude-compatible hook events, so UserPromptSubmit is its new-turn boundary too.
     // falls through
     case 'kimi':
+    // Why: CodeBuddy follows the Claude Code Hooks spec (UserPromptSubmit/PreToolUse/PostToolUse/Stop), so the Claude turn boundary applies verbatim.
+    // falls through
+    case 'codebuddy':
       return eventName === 'UserPromptSubmit'
     case 'codex':
       return eventName === 'SessionStart' || eventName === 'UserPromptSubmit'
@@ -2418,6 +2422,9 @@ function extractToolFields(
       return extractHermesToolFields(eventName, hookPayload)
     case 'devin':
       return extractClaudeToolFields(eventName, hookPayload)
+    case 'codebuddy':
+      // Why: CodeBuddy follows the Claude Code Hooks spec, so Claude's tool_name/tool_input extraction applies verbatim.
+      return extractClaudeToolFields(eventName, hookPayload)
   }
 }
 
@@ -2468,7 +2475,8 @@ function normalizeClaudeSubagentLifecycleEvent(
   state: HookListenerState,
   eventName: 'SubagentStart' | 'SubagentStop' | 'TeammateIdle',
   paneKey: string,
-  hookPayload: Record<string, unknown>
+  hookPayload: Record<string, unknown>,
+  agentType: AgentType = 'claude'
 ): ParsedAgentStatusPayload | null {
   const lifecycleField = eventName === 'TeammateIdle' ? 'teammate_name' : 'agent_id'
   const lifecycleId = readString(hookPayload, lifecycleField)
@@ -2499,7 +2507,7 @@ function normalizeClaudeSubagentLifecycleEvent(
       clearClaudePendingWaitForAgent(state, paneKey, (waitingAgentId) => waitingAgentId === agentId)
     }
   }
-  return buildClaudeChildDrivenStatusPayload(state, eventName, paneKey, hookPayload)
+  return buildClaudeChildDrivenStatusPayload(state, eventName, paneKey, hookPayload, agentType)
 }
 
 /** Sync the Claude lead-turn record when the SERVER infers an interrupt outside the hook stream (Ctrl+C with a missed Stop); else a later child lifecycle event resurrects the cancelled pane. */
@@ -2596,19 +2604,28 @@ function buildClaudeChildDrivenStatusPayload(
   state: HookListenerState,
   eventName: unknown,
   paneKey: string,
-  hookPayload: Record<string, unknown>
+  hookPayload: Record<string, unknown>,
+  agentType: AgentType = 'claude'
 ): ParsedAgentStatusPayload | null {
   // Why: default 'working' — a spawn proves activity even before the lead's first state-bearing event (e.g. Orca restarted mid-session).
   const lead = state.claudeLeadStateByPaneKey.get(paneKey)
   const leadState = lead?.state ?? 'working'
-  return buildClaudeStatusPayload(state, eventName, '', paneKey, hookPayload, {
-    stateName: resolveClaudePaneState(state, paneKey, {
-      state: leadState,
+  return buildClaudeStatusPayload(
+    state,
+    eventName,
+    '',
+    paneKey,
+    hookPayload,
+    {
+      stateName: resolveClaudePaneState(state, paneKey, {
+        state: leadState,
+        interrupted: lead?.interrupted
+      }),
+      updateToolSnapshot: false,
       interrupted: lead?.interrupted
-    }),
-    updateToolSnapshot: false,
-    interrupted: lead?.interrupted
-  })
+    },
+    agentType
+  )
 }
 
 function normalizeClaudeEvent(
@@ -2616,7 +2633,8 @@ function normalizeClaudeEvent(
   eventName: unknown,
   promptText: string,
   paneKey: string,
-  hookPayload: Record<string, unknown>
+  hookPayload: Record<string, unknown>,
+  agentType: AgentType = 'claude'
 ): ParsedAgentStatusPayload | null {
   const eventAgentId = readString(hookPayload, 'agent_id')
   if (
@@ -2624,7 +2642,7 @@ function normalizeClaudeEvent(
     eventName === 'SubagentStop' ||
     eventName === 'TeammateIdle'
   ) {
-    return normalizeClaudeSubagentLifecycleEvent(state, eventName, paneKey, hookPayload)
+    return normalizeClaudeSubagentLifecycleEvent(state, eventName, paneKey, hookPayload, agentType)
   }
   const previousLead = state.claudeLeadStateByPaneKey.get(paneKey)
   // Why: only a turn boundary may declare an interrupt or carry a prior one forward; any other event starts a fresh turn and drops it.
@@ -2699,22 +2717,30 @@ function normalizeClaudeEvent(
   if (subagentOriginId) {
     const lead = state.claudeLeadStateByPaneKey.get(paneKey)
     if (lead?.state !== 'waiting' || lead.waitingAgentId !== subagentOriginId) {
-      return buildClaudeChildDrivenStatusPayload(state, eventName, paneKey, hookPayload)
+      return buildClaudeChildDrivenStatusPayload(state, eventName, paneKey, hookPayload, agentType)
     }
     // Why: approval granted — update the tool snapshot (drop the pending card) as the lead's own next tool event would.
     // Restore the stashed lead state, not this child's 'working': the lead may already be done, and the done-gate never upgrades working back to done once the roster drains.
     const restored = lead.stateBeforeWait ?? { state: 'working' as const }
     state.claudeLeadStateByPaneKey.set(paneKey, restored)
-    return buildClaudeStatusPayload(state, eventName, promptText, paneKey, hookPayload, {
-      stateName: resolveClaudePaneState(state, paneKey, restored),
-      updateToolSnapshot: true,
-      interrupted: restored.interrupted
-    })
+    return buildClaudeStatusPayload(
+      state,
+      eventName,
+      promptText,
+      paneKey,
+      hookPayload,
+      {
+        stateName: resolveClaudePaneState(state, paneKey, restored),
+        updateToolSnapshot: true,
+        interrupted: restored.interrupted
+      },
+      agentType
+    )
   }
 
   // Why: lead events never carry agent_id; even a child missed by lifecycle tracking cannot own the lead turn or its background-work evidence.
   if (eventAgentId && !isWaitingInducing) {
-    return buildClaudeChildDrivenStatusPayload(state, eventName, paneKey, hookPayload)
+    return buildClaudeChildDrivenStatusPayload(state, eventName, paneKey, hookPayload, agentType)
   }
 
   if (isTurnBoundary && eventAgentId === undefined) {
@@ -2756,11 +2782,19 @@ function normalizeClaudeEvent(
     interrupted
   })
 
-  return buildClaudeStatusPayload(state, eventName, promptText, paneKey, hookPayload, {
-    stateName: effectiveState,
-    updateToolSnapshot: true,
-    interrupted
-  })
+  return buildClaudeStatusPayload(
+    state,
+    eventName,
+    promptText,
+    paneKey,
+    hookPayload,
+    {
+      stateName: effectiveState,
+      updateToolSnapshot: true,
+      interrupted
+    },
+    agentType
+  )
 }
 
 function buildClaudeStatusPayload(
@@ -2769,7 +2803,8 @@ function buildClaudeStatusPayload(
   promptText: string,
   paneKey: string,
   hookPayload: Record<string, unknown>,
-  options: { stateName: AgentStatusState; updateToolSnapshot: boolean; interrupted?: boolean }
+  options: { stateName: AgentStatusState; updateToolSnapshot: boolean; interrupted?: boolean },
+  agentType: AgentType = 'claude'
 ): ParsedAgentStatusPayload | null {
   // Why: child-driven refreshes are roster bookkeeping, not lead tool activity; read the cached snapshot without merging so they can't clear a live AskUserQuestion card or clobber the tool preview.
   const snapshot = options.updateToolSnapshot
@@ -2786,7 +2821,7 @@ function buildClaudeStatusPayload(
     prompt: resolvePrompt(state, paneKey, promptText, {
       resetOnNewTurn: options.updateToolSnapshot && isNewTurnEvent('claude', eventName)
     }),
-    agentType: 'claude',
+    agentType,
     toolName: snapshot.toolName,
     toolInput: snapshot.toolInput,
     interactivePrompt: snapshot.interactivePrompt,
@@ -3997,6 +4032,19 @@ export function normalizeHookPayload(
     case 'claude':
       payload = normalizeClaudeEvent(state, eventName, promptText, paneKey, hookPayloadRecord)
       break
+    case 'codebuddy':
+      // Why: CodeBuddy follows the Claude Code Hooks spec, so Claude's status extraction applies verbatim
+      // (UserPromptSubmit→working, Pre/PostToolUse→working, Stop→done). Its Stop payload lacks `is_interrupt`;
+      // the interrupt fallback in server.ts synthesizes `done` on cancellation.
+      payload = normalizeClaudeEvent(
+        state,
+        eventName,
+        promptText,
+        paneKey,
+        hookPayloadRecord,
+        'codebuddy'
+      )
+      break
     case 'codex':
       payload = normalizeCodexEvent(state, eventName, promptText, paneKey, hookPayloadRecord)
       break
@@ -4179,7 +4227,8 @@ export const HOOK_SOURCE_BY_PATHNAME: Readonly<Record<string, AgentHookSource>> 
   '/hook/copilot': 'copilot',
   '/hook/hermes': 'hermes',
   '/hook/devin': 'devin',
-  '/hook/kimi': 'kimi'
+  '/hook/kimi': 'kimi',
+  '/hook/codebuddy': 'codebuddy'
 })
 
 export function resolveHookSource(pathname: string): AgentHookSource | null {

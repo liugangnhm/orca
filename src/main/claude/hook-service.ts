@@ -1,6 +1,7 @@
 import { existsSync, rmSync, writeFileSync } from 'node:fs'
 import type { SFTPWrapper } from 'ssh2'
 import type { AgentHookInstallState, AgentHookInstallStatus } from '../../shared/agent-hook-types'
+import type { AgentHookSource } from '../../shared/agent-hook-relay'
 import {
   buildWindowsAgentHookCurlPostCommand,
   readHooksJson,
@@ -38,24 +39,33 @@ import {
   getStatusLineSlotState,
   removeManagedHooks,
   removeManagedStatusLine,
-  type ClaudeCompatibleHookSettings
+  type ClaudeCompatibleHookSettings,
+  type HookEventSpec
 } from './hook-settings'
 
 type ClaudeHookServiceOptions = {
   agent: AgentHookInstallStatus['agent']
   displayName: string
   settings: ClaudeCompatibleHookSettings
+  /** Hook events to install. Defaults to CLAUDE_EVENTS; CodeBuddy passes its narrower supported set. */
+  events?: readonly HookEventSpec[]
+  /** URL source the managed script posts to. Defaults to 'claude' — OpenClaude deliberately shares Claude's pipeline. */
+  hookSource?: AgentHookSource
 }
 
 const DEFAULT_CLAUDE_HOOK_SERVICE_OPTIONS: ClaudeHookServiceOptions = {
   agent: 'claude',
   displayName: 'Claude',
-  settings: CLAUDE_HOOK_SETTINGS
+  settings: CLAUDE_HOOK_SETTINGS,
+  events: CLAUDE_EVENTS,
+  hookSource: 'claude'
 }
 
 function getManagedScript(
   target: 'local' | 'posix' = 'local',
-  options: { skipWhenDevinImportsClaude?: boolean } = {}
+  options: { skipWhenDevinImportsClaude?: boolean; hookSource: AgentHookSource } = {
+    hookSource: 'claude'
+  }
 ): string {
   if (target === 'local' && process.platform === 'win32') {
     return [
@@ -71,7 +81,7 @@ function getManagedScript(
       'if defined ORCA_AGENT_HOOK_ENDPOINT if exist "%ORCA_AGENT_HOOK_ENDPOINT%" call "%ORCA_AGENT_HOOK_ENDPOINT%" 2>nul',
       ...buildWindowsHookEnvironmentGuardLines(),
       // Why: use curl.exe to avoid an extra PowerShell startup per hook.
-      buildWindowsAgentHookCurlPostCommand('claude'),
+      buildWindowsAgentHookCurlPostCommand(options.hookSource),
       'exit /b 0',
       ...buildWindowsHookStdinDrainEpilogue(),
       ''
@@ -99,7 +109,8 @@ function getManagedScript(
     'fi',
     // Why: post form fields because path-bearing payloads are unsafe in hand-built JSON.
     // Why: pipe payload to curl stdin to keep large output off the command line.
-    'printf \'%s\' "$payload" | curl -sS -X POST "http://127.0.0.1:${ORCA_AGENT_HOOK_PORT}/hook/claude" \\',
+    // Why: `\${...}` escapes keep the shell's `${ORCA_AGENT_HOOK_PORT}` literal in the emitted script.
+    `printf '%s' "$payload" | curl -sS -X POST "http://127.0.0.1:\${ORCA_AGENT_HOOK_PORT}/hook/${options.hookSource}" \\`,
     '  --connect-timeout 0.5 --max-time 1.5 \\',
     '  -H "Content-Type: application/x-www-form-urlencoded" \\',
     '  -H "X-Orca-Agent-Hook-Token: ${ORCA_AGENT_HOOK_TOKEN}" \\',
@@ -140,7 +151,7 @@ export class ClaudeHookService {
     const command = getManagedCommand(scriptPath)
     const missing: string[] = []
     let presentCount = 0
-    for (const event of CLAUDE_EVENTS) {
+    for (const event of this.options.events ?? CLAUDE_EVENTS) {
       const definitions = Array.isArray(config.hooks?.[event.eventName])
         ? config.hooks![event.eventName]!
         : []
@@ -187,11 +198,15 @@ export class ClaudeHookService {
     let nextConfig = applyManagedHooks(
       config,
       command,
-      getManagedScriptFileName(this.options.settings)
+      getManagedScriptFileName(this.options.settings),
+      this.options.events ?? CLAUDE_EVENTS
     )
     writeManagedScript(
       scriptPath,
-      getManagedScript('local', { skipWhenDevinImportsClaude: this.options.agent === 'claude' })
+      getManagedScript('local', {
+        skipWhenDevinImportsClaude: this.options.agent === 'claude',
+        hookSource: this.options.hookSource ?? 'claude'
+      })
     )
     // Why: the statusline usage feed is Claude-only — OpenClaude data would be misattributed to the Claude provider.
     if (this.options.agent === 'claude') {
@@ -246,14 +261,22 @@ export class ClaudeHookService {
 
       // Why: the POSIX wrapper is identical regardless of where the script lands; only the path differs.
       const command = getRemoteManagedCommand(remoteScriptPath)
-      const nextConfig = applyManagedHooks(config, command, remoteScriptFileName)
+      const nextConfig = applyManagedHooks(
+        config,
+        command,
+        remoteScriptFileName,
+        this.options.events ?? CLAUDE_EVENTS
+      )
 
       // Why: write scripts before settings to avoid settings pointing to missing scripts.
       // Why: SSH scripts always use POSIX .sh paths, regardless of the local OS.
       await writeManagedScriptRemote(
         sftp,
         remoteScriptPath,
-        getManagedScript('posix', { skipWhenDevinImportsClaude: this.options.agent === 'claude' })
+        getManagedScript('posix', {
+          skipWhenDevinImportsClaude: this.options.agent === 'claude',
+          hookSource: this.options.hookSource ?? 'claude'
+        })
       )
       // Why: no statusline install here — this path serves SSH remotes and WSL guests, whose relay hook
       // listener doesn't route /statusline/claude, and an SSH box's Claude login can be a different

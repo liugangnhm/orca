@@ -13,8 +13,25 @@ import {
 } from '../agent-hooks/installer-utils'
 
 export type ClaudeCompatibleHookSettings = {
-  configDirName: '.claude' | '.openclaude'
-  scriptBaseName: 'claude-hook' | 'openclaude-hook'
+  configDirName: '.claude' | '.openclaude' | '.codebuddy'
+  scriptBaseName: 'claude-hook' | 'openclaude-hook' | 'codebuddy-hook'
+}
+
+// Why: readonly hooks allow `as const` event literal arrays (CLAUDE_EVENTS,
+// CODEBUDDY_EVENTS) to flow through the install pipeline unchanged; the
+// definition is reshaped into a mutable HookDefinition before write.
+export type HookEventSpec = {
+  eventName: string
+  definition: {
+    matcher?: string
+    hooks?: readonly {
+      type: string
+      command: string
+      timeout?: number
+      [key: string]: unknown
+    }[]
+    [key: string]: unknown
+  }
 }
 
 export const CLAUDE_HOOK_SETTINGS: ClaudeCompatibleHookSettings = {
@@ -25,6 +42,11 @@ export const CLAUDE_HOOK_SETTINGS: ClaudeCompatibleHookSettings = {
 export const OPENCLAUDE_HOOK_SETTINGS: ClaudeCompatibleHookSettings = {
   configDirName: '.openclaude',
   scriptBaseName: 'openclaude-hook'
+}
+
+export const CODEBUDDY_HOOK_SETTINGS: ClaudeCompatibleHookSettings = {
+  configDirName: '.codebuddy',
+  scriptBaseName: 'codebuddy-hook'
 }
 
 export const CLAUDE_EVENTS = [
@@ -57,6 +79,24 @@ export const CLAUDE_EVENTS = [
   },
   {
     eventName: 'PermissionRequest',
+    definition: { matcher: '*', hooks: [{ type: 'command', command: '' }] }
+  }
+] as const
+
+// Why: CodeBuddy follows the Claude Code Hooks spec but only emits these four
+// events (per its docs); registering unsupported ones could error on run.
+// UserPromptSubmit/PreToolUse/PostToolUse drive working + the live tool readout,
+// Stop drives done. Interrupt fallback (server.ts) covers cancellation since
+// CodeBuddy's Stop payload carries no `is_interrupt`.
+export const CODEBUDDY_EVENTS = [
+  { eventName: 'UserPromptSubmit', definition: { hooks: [{ type: 'command', command: '' }] } },
+  { eventName: 'Stop', definition: { hooks: [{ type: 'command', command: '' }] } },
+  {
+    eventName: 'PreToolUse',
+    definition: { matcher: '*', hooks: [{ type: 'command', command: '' }] }
+  },
+  {
+    eventName: 'PostToolUse',
     definition: { matcher: '*', hooks: [{ type: 'command', command: '' }] }
   }
 ] as const
@@ -114,12 +154,13 @@ export function getRemoteManagedCommand(scriptPath: string): string {
 export function applyManagedHooks(
   config: HooksConfig,
   command: string,
-  scriptFileName = getManagedScriptFileName()
+  scriptFileName = getManagedScriptFileName(),
+  events: readonly HookEventSpec[] = CLAUDE_EVENTS
 ): HooksConfig {
   const nextHooks = { ...config.hooks }
   const isManagedCommand = createManagedCommandMatcher(scriptFileName)
 
-  for (const event of CLAUDE_EVENTS) {
+  for (const event of events) {
     const current = Array.isArray(nextHooks[event.eventName]) ? nextHooks[event.eventName] : []
     const cleaned = removeManagedCommands(current, isManagedCommand)
     const definition: HookDefinition = {

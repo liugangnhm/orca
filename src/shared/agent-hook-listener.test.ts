@@ -103,6 +103,7 @@ describe('shared agent-hook-listener', () => {
     expect(resolveHookSource('/hook/omp')).toBe('omp')
     expect(resolveHookSource('/hook/command-code')).toBe('command-code')
     expect(resolveHookSource('/hook/mimo-code')).toBe('mimo-code')
+    expect(resolveHookSource('/hook/codebuddy')).toBe('codebuddy')
     expect(resolveHookSource('/hook/unknown')).toBeNull()
     expect(resolveHookSource('/')).toBeNull()
   })
@@ -136,6 +137,70 @@ describe('shared agent-hook-listener', () => {
     expect(event!.payload.state).toBe('working')
     expect(event!.payload.prompt).toBe('hello')
     expect(event!.payload.agentType).toBe('claude')
+  })
+
+  it('normalizes a CodeBuddy UserPromptSubmit body to a working state', () => {
+    const event = normalizeHookPayload(
+      state,
+      'codebuddy',
+      {
+        paneKey: PANE_KEY,
+        tabId: 'tab-1',
+        worktreeId: 'wt',
+        env: 'production',
+        version: '1',
+        payload: { hook_event_name: 'UserPromptSubmit', prompt: '帮我实现登录' }
+      },
+      'production'
+    )
+    expect(event).not.toBeNull()
+    expect(event!.paneKey).toBe(PANE_KEY)
+    expect(event!.connectionId).toBeNull()
+    expect(event!.payload.state).toBe('working')
+    expect(event!.payload.prompt).toBe('帮我实现登录')
+    expect(event!.payload.agentType).toBe('codebuddy')
+  })
+
+  it('normalizes a CodeBuddy Stop body to a done state', () => {
+    const event = normalizeHookPayload(
+      state,
+      'codebuddy',
+      {
+        paneKey: PANE_KEY,
+        tabId: 'tab-1',
+        worktreeId: 'wt',
+        env: 'production',
+        version: '1',
+        payload: { hook_event_name: 'Stop', stop_hook_active: false }
+      },
+      'production'
+    )
+    expect(event).not.toBeNull()
+    expect(event!.payload.state).toBe('done')
+    expect(event!.payload.agentType).toBe('codebuddy')
+  })
+
+  it('normalizes a CodeBuddy PreToolUse body with a live tool preview', () => {
+    const event = normalizeHookPayload(
+      state,
+      'codebuddy',
+      {
+        paneKey: PANE_KEY,
+        tabId: 'tab-1',
+        worktreeId: 'wt',
+        env: 'production',
+        version: '1',
+        payload: {
+          hook_event_name: 'PreToolUse',
+          tool_name: 'execute_command',
+          tool_input: { command: 'npm test' }
+        }
+      },
+      'production'
+    )
+    expect(event).not.toBeNull()
+    expect(event!.payload.state).toBe('working')
+    expect(event!.payload.toolName).toBe('execute_command')
   })
 
   it('normalizes Gemini BeforeTool to working with tool fields', () => {
