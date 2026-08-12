@@ -1,5 +1,5 @@
 // Why: locks in the CodeBuddy install contract — the `.codebuddy/settings.json`
-// shape, the narrow four-event set, the /hook/codebuddy script body, and remote
+// shape, the narrow five-event set, the /hook/codebuddy script body, and remote
 // install. CodeBuddy follows the Claude Code Hooks spec, so these tests pin the
 // deltas from Claude (no statusLine, no unsupported events) that make it safe
 // to run alongside the Claude-family installer logic.
@@ -54,13 +54,19 @@ describe('codebuddyHookService.install', () => {
       expect(status.configPath).toBe(join(tmpHome, '.codebuddy', 'settings.json'))
 
       const settings = readSettings(tmpHome)
-      for (const eventName of ['UserPromptSubmit', 'Stop', 'PreToolUse', 'PostToolUse']) {
+      for (const eventName of [
+        'UserPromptSubmit',
+        'Stop',
+        'PreToolUse',
+        'PostToolUse',
+        'Notification'
+      ]) {
         expect(
           hookCommands(settings, eventName).some(isCodebuddyManagedCommand),
           `missing managed hook for ${eventName}`
         ).toBe(true)
       }
-      // Why: CodeBuddy only emits these four events; registering the rest could error on run.
+      // Why: CodeBuddy only emits these five events; registering the rest could error on run.
       for (const eventName of [
         'StopFailure',
         'SubagentStart',
@@ -145,7 +151,13 @@ describe('codebuddyHookService.installRemote', () => {
 
     const configPath = `${REMOTE_HOME}/.codebuddy/settings.json`
     const settings = JSON.parse(fs.files.get(configPath)!) as Record<string, unknown>
-    for (const eventName of ['UserPromptSubmit', 'Stop', 'PreToolUse', 'PostToolUse']) {
+    for (const eventName of [
+      'UserPromptSubmit',
+      'Stop',
+      'PreToolUse',
+      'PostToolUse',
+      'Notification'
+    ]) {
       const commands = ((settings.hooks as Record<string, unknown[]>)[eventName] ?? []).flatMap(
         (definition) =>
           ((definition as { hooks?: { command?: string }[] }).hooks ?? []).map(

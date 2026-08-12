@@ -83,11 +83,14 @@ export const CLAUDE_EVENTS = [
   }
 ] as const
 
-// Why: CodeBuddy follows the Claude Code Hooks spec but only emits these four
+// Why: CodeBuddy follows the Claude Code Hooks spec but only emits these five
 // events (per its docs); registering unsupported ones could error on run.
 // UserPromptSubmit/PreToolUse/PostToolUse drive working + the live tool readout,
-// Stop drives done. Interrupt fallback (server.ts) covers cancellation since
-// CodeBuddy's Stop payload carries no `is_interrupt`.
+// Stop drives done. Notification (permission_prompt/idle_prompt/elicitation_dialog)
+// fires while CodeBuddy blocks on a human answer or approval; without it Orca
+// never learns the agent is waiting and raises no attention notification.
+// Interrupt fallback (server.ts) covers cancellation since CodeBuddy's Stop
+// payload carries no `is_interrupt`.
 export const CODEBUDDY_EVENTS = [
   { eventName: 'UserPromptSubmit', definition: { hooks: [{ type: 'command', command: '' }] } },
   { eventName: 'Stop', definition: { hooks: [{ type: 'command', command: '' }] } },
@@ -98,7 +101,10 @@ export const CODEBUDDY_EVENTS = [
   {
     eventName: 'PostToolUse',
     definition: { matcher: '*', hooks: [{ type: 'command', command: '' }] }
-  }
+  },
+  // Why: no matcher so every notification_type (permission_prompt, idle_prompt,
+  // auth_success, ...) reaches Orca; the listener filters by type.
+  { eventName: 'Notification', definition: { hooks: [{ type: 'command', command: '' }] } }
 ] as const
 
 export function getConfigPath(settings = CLAUDE_HOOK_SETTINGS): string {

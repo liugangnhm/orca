@@ -2662,13 +2662,26 @@ function normalizeClaudeEvent(
   // Treat that PreToolUse as waiting so the sidebar shows amber attention, not a spinner that decays to grey. Mirrors normalizeKimiEvent.
   const isAskUserQuestion =
     eventName === 'PreToolUse' && isAskUserQuestionTool(readString(hookPayload, 'tool_name'))
+  // Why: CodeBuddy registers a Notification hook and emits permission_prompt /
+  // idle_prompt / elicitation_dialog while blocked on a human answer, approval,
+  // or idle input. Treat those as waiting so the sidebar shows amber attention
+  // and the completion coordinator raises the "needs input" banner (mirrors
+  // normalizeCopilotEvent); auth_success stays ignored.
+  const notificationType =
+    eventName === 'Notification'
+      ? readFirstString(hookPayload, ['notification_type', 'notificationType'])
+      : undefined
+  const isWaitingNotification =
+    notificationType === 'permission_prompt' ||
+    notificationType === 'elicitation_dialog' ||
+    notificationType === 'idle_prompt'
   const reportedStateName =
     eventName === 'UserPromptSubmit' ||
     eventName === 'PostToolUse' ||
     eventName === 'PostToolUseFailure' ||
     (eventName === 'PreToolUse' && !isAskUserQuestion)
       ? 'working'
-      : eventName === 'PermissionRequest' || isAskUserQuestion
+      : eventName === 'PermissionRequest' || isAskUserQuestion || isWaitingNotification
         ? 'waiting'
         : isTurnBoundary
           ? 'done'
@@ -2782,19 +2795,33 @@ function normalizeClaudeEvent(
     interrupted
   })
 
-  return buildClaudeStatusPayload(
+  // Why: Notification's `message` is status text ("CodeBuddy needs your
+  // permission to use Bash"), not the user's prompt; '' keeps the cached
+  // UserPromptSubmit prompt. updateToolSnapshot=false preserves a live
+  // AskUserQuestion card (a Notification would otherwise blank interactivePrompt).
+  const effectivePrompt = eventName === 'Notification' ? '' : promptText
+  const effectivePayload = buildClaudeStatusPayload(
     state,
     eventName,
-    promptText,
+    effectivePrompt,
     paneKey,
     hookPayload,
     {
       stateName: effectiveState,
-      updateToolSnapshot: true,
+      updateToolSnapshot: eventName !== 'Notification',
       interrupted
     },
     agentType
   )
+  // Why: surface the concrete wait reason as the last assistant message so the
+  // attention banner reads "needs permission" instead of the last tool summary.
+  if (effectivePayload && eventName === 'Notification') {
+    const message = readFirstString(hookPayload, ['message', 'body', 'text', 'title'])
+    if (message) {
+      effectivePayload.lastAssistantMessage = message
+    }
+  }
+  return effectivePayload
 }
 
 function buildClaudeStatusPayload(

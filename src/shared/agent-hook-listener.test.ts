@@ -203,6 +203,74 @@ describe('shared agent-hook-listener', () => {
     expect(event!.payload.toolName).toBe('execute_command')
   })
 
+  it('normalizes a CodeBuddy permission_prompt Notification to a waiting state', () => {
+    const event = normalizeHookPayload(
+      state,
+      'codebuddy',
+      {
+        paneKey: PANE_KEY,
+        tabId: 'tab-1',
+        worktreeId: 'wt',
+        env: 'production',
+        version: '1',
+        payload: {
+          hook_event_name: 'Notification',
+          notification_type: 'permission_prompt',
+          message: 'CodeBuddy needs your permission to use Bash'
+        }
+      },
+      'production'
+    )
+    expect(event).not.toBeNull()
+    expect(event!.payload.state).toBe('waiting')
+    expect(event!.payload.agentType).toBe('codebuddy')
+    // Why: the wait reason becomes the last assistant message so the banner
+    // reads "needs permission" instead of the previous tool summary.
+    expect(event!.payload.lastAssistantMessage).toBe('CodeBuddy needs your permission to use Bash')
+  })
+
+  it('normalizes a CodeBuddy idle_prompt Notification to a waiting state', () => {
+    const event = normalizeHookPayload(
+      state,
+      'codebuddy',
+      {
+        paneKey: PANE_KEY,
+        tabId: 'tab-1',
+        worktreeId: 'wt',
+        env: 'production',
+        version: '1',
+        payload: {
+          hook_event_name: 'Notification',
+          notification_type: 'idle_prompt',
+          message: 'CodeBuddy is waiting for your input'
+        }
+      },
+      'production'
+    )
+    expect(event).not.toBeNull()
+    expect(event!.payload.state).toBe('waiting')
+  })
+
+  it('ignores a CodeBuddy auth_success Notification (no state change)', () => {
+    const event = normalizeHookPayload(
+      state,
+      'codebuddy',
+      {
+        paneKey: PANE_KEY,
+        tabId: 'tab-1',
+        worktreeId: 'wt',
+        env: 'production',
+        version: '1',
+        payload: {
+          hook_event_name: 'Notification',
+          notification_type: 'auth_success'
+        }
+      },
+      'production'
+    )
+    expect(event).toBeNull()
+  })
+
   it('normalizes Gemini BeforeTool to working with tool fields', () => {
     const event = normalizeHookPayload(
       state,
